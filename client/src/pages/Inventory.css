@@ -1,0 +1,223 @@
+.inventory-container {
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  background-color: #a2eea5;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;              /* Enable vertical scrolling */
+  box-sizing: border-box;
+  max-height: calc(100vh - 40px); 
+}
+
+
+.inventory-container h2 {
+  margin-bottom: 16px;
+}
+
+.inventory-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.control-button,
+.open-popup-button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  flex: 1 1 auto;
+  min-width: 150px;
+  max-width: 200px;
+  font-weight: bold;
+}
+
+.control-button:hover,
+.open-popup-button:hover {
+  background-color: #0056b3;
+}
+
+.control-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.search-input {
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  flex: 1;
+  min-width: 250px;
+  flex: 2 1 250px;
+  min-width: 250px;
+}
+
+.inventory-table {
+  width: 100%;
+  border-collapse: collapse;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  margin-top: 24px;
+}
+
+.inventory-table th,
+.inventory-table td {
+  padding: 10px;
+  border: 1px solid #a2eea5;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.inventory-table th {
+  background-color: #f4f4f4;
+}
+
+.inventory-table tr:nth-child(even) {
+  background-color: #76d379;
+}
+
+.icon {
+  cursor: pointer;
+  margin-right: 12px;
+  font-size: 1.2rem;
+  color: white;
+  transition: color 0.2s;
+}
+
+.icon:last-child {
+  margin-right: 0;
+}
+
+.edit-icon:hover {
+  color: #ccc;
+}
+
+.delete-icon:hover {
+  color: #f88;
+}
+
+.popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.popup-content {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  width: 90%;
+  max-width: 500px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  position: relative;
+}
+
+.popup-content .close-popup {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: #f44336;
+  color: white;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 24px;
+  text-align: center;
+  padding: 0;
+  z-index: 10;
+}
+
+.popup-content button,
+.add-stock-form button {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 12px;
+  border-radius: 5px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.popup-content button:hover,
+.add-stock-form button:hover {
+  background-color: #218838;
+  transform: scale(1.03);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.add-stock-form input,
+.add-stock-form select,
+.add-stock-form button {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 10px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+
+@media (max-width: 768px) {
+  .inventory-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .control-button,
+  .open-popup-button,
+  .search-input {
+    width: 100%;
+  }
+
+  .inventory-table {
+    display: block;
+    overflow-x: auto;
+  }
+
+  .inventory-table th,
+  .inventory-table td {
+    font-size: 13px;
+    padding: 8px;
+  }
+}
+
+.popup-content button {
+  background-color: #28a745;
+}
+.top-right-buttons {
+  display: flex;
+  justify-content: flex-end;  /* Align buttons to the right */
+  gap: 12px;                  /* Space between buttons */
+  margin-bottom: 20px;        /* Optional spacing below the buttons */
+}
+.left-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-left: 650px;
+}
+.disabled-icon {
+  opacity: 0.4;
+  pointer-events: none;
+}

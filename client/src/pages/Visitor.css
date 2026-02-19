@@ -1,0 +1,105 @@
+.active-visitors-container {
+  padding: 24px 32px;
+  background-color: #f9fafb;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgb(0 0 0 / 0.1);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #333;
+  width: 100%;       /* Ensure container can expand */
+  overflow-x: auto;  /* Allow horizontal scroll if needed */
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.header h2 {
+  font-weight: 700;
+  font-size: 1.75rem;
+  color: #111827;
+ align-items: center;
+}
+
+.enroll-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background-color: #2563eb;
+  color: white;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 4px 6px rgb(37 99 235 / 0.4);
+  font-size: 1rem;
+}
+
+.enroll-button:hover {
+  background-color: #1d4ed8;
+  box-shadow: 0 6px 12px rgb(29 78 216 / 0.5);
+}
+
+.visitor-table {
+  width: 100%;       /* Table spans full width of container */
+  border-collapse: separate;
+  border-spacing: 0 8px;
+  font-size: 1rem;
+  /* Remove min-width if you want it fully responsive */
+  /* min-width: 700px; */
+}
+
+.visitor-table thead th {
+  background-color: #009207;
+  color: white;
+  padding: 14px 18px;
+  font-weight: 700;
+  text-align: center;
+  border-radius: 8px 8px 0 0;
+  user-select: none;
+  letter-spacing: 0.03em;
+}
+
+.visitor-table tbody tr {
+  background-color: white;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.1);
+  transition: background-color 0.3s ease;
+  border-radius: 8px;
+  cursor: default;
+}
+
+.visitor-table tbody tr:hover {
+  background-color: #eff6ff;
+  cursor: pointer;
+}
+
+.visitor-table tbody td {
+  padding: 14px 18px;
+  border-bottom: 1px solid #e0e7ff;
+  vertical-align: middle;
+  color: #4b5563;
+}
+
+/* Remove bottom border for last row */
+.visitor-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.collect-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background-color: #87B451;
+  color: rgb(51, 48, 48);
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 4px 6px rgba(30, 131, 17, 0.719);
+  font-size: 1rem;
+}

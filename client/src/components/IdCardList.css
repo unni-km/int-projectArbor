@@ -1,0 +1,149 @@
+.id-card-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 1rem;
+  justify-content: flex-start;
+}
+
+.id-card {
+  width: 174px;
+  height: 242px;
+  background-color: #fff;
+  border: 2px solid #ccc;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: transform 0.2s ease;
+   display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.id-card:hover {
+  transform: translateY(-3px);
+}
+
+.company-logo {
+  width: 87px;
+  height: auto;
+ 
+}
+
+.employee-photo-placeholder {
+  width: 80px;
+  height: 80px;
+  background-color: #eef1f5;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.visitor-icon {
+  font-size: 36px;
+  color: #2c3e50;
+}
+
+
+.card-info {
+  font-size: 14px;
+  color: #333333;
+}
+
+.card-info p {
+  margin: 4px 0;
+}
+
+.add-id-button {
+  margin: 10px 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  background-color: #2c3e50;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+ margin-right: 26px;
+}
+
+.company-logo {
+  width: 27px;
+  height: auto;
+  margin-right: -19px;
+  padding: 24px;
+}
+
+.company-name {
+  font-size: 13px;
+  color: #333;
+  font-weight: 500;
+}
+.foot {
+  background-color: #4CAF50;
+  font-size: 6px;
+  width: 100%;             /* make it span full card width */
+  margin-top: auto;        /* push footer to bottom */
+  padding: 4px 6px;        /* add some padding */
+  border-radius: 0 0 10px 10px; /* optional: round bottom corners */
+  box-sizing: border-box;  /* ensures padding doesn't exceed width */
+  text-align: center;
+ 
+
+}
+.foot,.p{
+    color: #ffffff;
+     font-weight: 500;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 18px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0;
+  right: 0; bottom: 0;
+  background-color: #ccc;
+  transition: 0.4s;
+  border-radius: 34px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px; width: 14px;
+  left: 2px; bottom: 2px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #4CAF50;
+}
+
+input:checked + .slider:before {
+  transform: translateX(16px);
+}

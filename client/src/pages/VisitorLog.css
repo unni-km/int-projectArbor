@@ -1,0 +1,25 @@
+.visitors-container {
+  padding: 20px;
+}
+
+.visitors-container h2 {
+  margin-bottom: 20px;
+}
+
+.visitors-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.visitors-table th, .visitors-table td {
+  padding: 12px 10px;
+  border: 1px solid #ccc;
+  text-align: left;
+}
+
+.visitors-table th {
+  background-color: #f4f4f4;
+  font-weight: 600;
+}

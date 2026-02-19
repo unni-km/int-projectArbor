@@ -1,0 +1,16 @@
+.back-button-container {
+  display: flex;
+  justify-content: flex-start;
+  padding: 16px;
+}
+
+.back-arrow {
+  cursor: pointer;
+  color: var(--icon-color, #ffffff);
+  font-size: 24px;
+  transition: transform 0.3s ease;
+}
+
+.back-arrow:hover {
+  transform: scale(1.2);
+}
