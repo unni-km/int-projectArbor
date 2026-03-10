@@ -20,6 +20,10 @@ const ExpenseSidebar = ({ view, setView }) => {
       key: "budget",
       label: "Budget Overview",
       icon: <FaMoneyBillWave size={20} />,
+    },{
+      key: "Workflow",
+      label: "Workflow Control",
+      icon: <FaClipboardList size={20} />,
     });
   }
 

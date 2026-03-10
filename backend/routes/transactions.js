@@ -18,9 +18,9 @@ router.get("/", async (req, res) => {
         t.transaction_date,
         t.status
       FROM inventory_transactions t
-      JOIN m_inventory inv ON t.inventory_id = inv.id
-      JOIN item i ON inv.item_id = i.id
-      JOIN users u ON t.user_id = u.id
+    LEFT JOIN m_inventory inv ON t.inventory_id = inv.id
+     LEFT JOIN item i ON inv.item_id = i.id
+      LEFT JOIN users u ON t.user_id = u.id
       ORDER BY t.transaction_date DESC
     `);
 

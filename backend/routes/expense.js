@@ -289,7 +289,7 @@ router.post("/quotes/recommend", async (req, res) => {
    4. CH FINAL APPROVAL OF QUOTE
 ------------------------------------------ */
 router.post("/quotes/approve", async (req, res) => {
-  const { expense_id, selected_quote_id, approved_by } = req.body;
+  const { expense_id, selected_quote_id, approved_by,note} = req.body;
 
   let conn;
   try {
@@ -299,11 +299,7 @@ router.post("/quotes/approve", async (req, res) => {
 
     /* ================== GET VENDOR FROM QUOTE ================== */
     const [[quote]] = await conn.query(
-      `
-      SELECT vendor_id
-      FROM expense_quotes
-      WHERE id = ?
-      `,
+      `SELECT vendor_id FROM expense_quotes WHERE id = ?`,
       [selected_quote_id]
     );
 
@@ -315,30 +311,24 @@ router.post("/quotes/approve", async (req, res) => {
 
     /* ================== MARK SELECTED QUOTE ================== */
     await conn.query(
-      `
-      UPDATE expense_quotes
-      SET is_selected = 1
-      WHERE id = ?
-      `,
+      `UPDATE expense_quotes SET is_selected = 1 WHERE id = ?`,
       [selected_quote_id]
     );
 
     /* ================== UNSELECT OTHERS ================== */
     await conn.query(
-      `
-      UPDATE expense_quotes
-      SET is_selected = 0
-      WHERE expense_id = ? AND id != ?
-      `,
+      `UPDATE expense_quotes 
+       SET is_selected = 0 
+       WHERE expense_id = ? AND id != ?`,
       [expense_id, selected_quote_id]
     );
 
-    /* ================== UPDATE EXPENSE ================== */
+    /* ================== MOVE TO NEW STAGE ================== */
     await conn.query(
       `
       UPDATE expense_requests
       SET
-        current_status = 'PO_PENDING_DM',
+        current_status = 'PO_DRAFT_DE',
         selected_vendor_id = ?,
         updated_by = ?,
         updated_at = NOW()
@@ -347,10 +337,27 @@ router.post("/quotes/approve", async (req, res) => {
       [vendorId, approved_by || null, expense_id]
     );
 
+       await conn.query(
+      `
+      INSERT INTO approval_logs
+      (entity_type, entity_id, action, stage, comment, acted_by)
+      VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [
+        "EXPENSE",
+        expense_id,
+        "APPROVED",
+        "QUOTE_APPROVAL_CH",
+        note || null,
+        approved_by
+      ]
+    );
+
     await conn.commit();
 
     res.json({
-      message: "Vendor approved successfully",
+      message: "Vendor approved. PO moved to DE draft stage.",
+      next_status: "PO_DRAFT_DE",
       selected_vendor_id: vendorId
     });
 
@@ -363,6 +370,56 @@ router.post("/quotes/approve", async (req, res) => {
   }
 });
 
+router.post("/po/update-status", async (req, res) => {
+  const { expense_id, status, acted_by } = req.body;
+
+  const allowedStatuses = [
+    "PO_REVIEW_DM",
+    "PO_REAPPROVAL_CH",
+    "PO_APPROVED_DM",
+    "PO_ISSUED"
+  ];
+
+  if (!allowedStatuses.includes(status)) {
+    return res.status(400).json({ error: "Invalid PO status transition" });
+  }
+
+  let conn;
+  try {
+    const pool = await poolPromise;
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    /* ================== UPDATE STATUS ================== */
+    await conn.query(
+      `
+      UPDATE expense_requests
+      SET
+        current_status = ?,
+        updated_by = ?,
+        updated_at = NOW()
+      WHERE id = ?
+      `,
+      [status, acted_by || null, expense_id]
+    );
+
+   
+
+    await conn.commit();
+
+    res.json({
+      message: "PO status updated successfully",
+      current_status: status
+    });
+
+  } catch (err) {
+    if (conn) await conn.rollback();
+    console.error("PO status update error:", err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
 
 /* -----------------------------------------
    5. GENERATE PO (DM)
@@ -394,7 +451,8 @@ router.get("/po-items/:expenseId", async (req, res) => {
         i.name AS item_name,
         r.quantity,
         qi.unit_price,
-        g.gst_rate
+        g.gst_rate,
+        r.original_quantity
       FROM expense_quote_items qi
       JOIN rfq_items r ON r.id = qi.rfq_item_id
       JOIN item i ON i.id = r.item_id
@@ -792,8 +850,8 @@ router.post("/rfq/submit", async (req, res) => {
     // 1️⃣ Insert RFQ items
     const insertSql = `
       INSERT INTO rfq_items
-      (expense_id, item_id, quantity, description, created_by)
-      VALUES (?, ?, ?, ?, ?)
+      (expense_id, item_id, quantity, description, created_by,original_quantity)
+      VALUES (?, ?, ?, ?, ?, ?)
     `;
 
     for (const item of items) {
@@ -803,6 +861,7 @@ router.post("/rfq/submit", async (req, res) => {
         item.quantity,
         item.description || null,
         created_by,
+         item.quantity,
       ]);
     }
 
@@ -862,7 +921,7 @@ router.post("/rfq/recommend", async (req, res) => {
 });
 
 router.post("/rfq/approve-ch", async (req, res) => {
-  const { expense_id, approved_by } = req.body;
+  const { expense_id, approved_by,note } = req.body;
 
   if (!expense_id) {
     return res.status(400).json({ message: "Expense ID required" });
@@ -880,6 +939,22 @@ router.post("/rfq/approve-ch", async (req, res) => {
       WHERE id = ?
       `,
       [approved_by || null, expense_id]
+    );
+    
+     await pool.query(
+      `
+      INSERT INTO approval_logs
+      (entity_type, entity_id, action, stage, comment, acted_by)
+      VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [
+        "EXPENSE",
+        expense_id,
+        "APPROVED",
+        "RFQ_RECOMMENDED_DM",
+        note || null,
+        approved_by
+      ]
     );
 
     res.json({
@@ -1535,6 +1610,385 @@ router.get("/quotes/download/:id", async (req, res) => {
 });
 
 
+router.post("/rfq/reject", async (req, res) => {
+  try {
+    const { expense_id, reason, acted_by, stage } = req.body;
 
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: "Rejection reason required" });
+    }
+
+    const pool = await poolPromise;
+
+      const rejectedStatus = `${stage}_REJECTED`;
+
+    // 1️⃣ Update expense status
+    await pool.execute(
+      `UPDATE expense_requests
+       SET current_status = ?
+       WHERE id = ?`,
+      [rejectedStatus, expense_id]
+    );
+
+    // 2️⃣ Insert into approval_logs
+    await pool.execute(
+      `INSERT INTO approval_logs
+       (entity_type, entity_id, action, stage, comment, acted_by)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        "EXPENSE",
+        expense_id,
+        "REJECTED",
+        stage,
+        reason,
+        acted_by
+      ]
+    );
+
+    res.json({ message: "RFQ rejected successfully" });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "RFQ rejection failed" });
+  }
+});
+
+
+router.post("/po/update-quantities", async (req, res) => {
+  const { expense_id, items } = req.body;
+
+  let conn;
+
+  try {
+    const pool = await poolPromise;
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    for (const item of items) {
+
+      await conn.query(
+        `UPDATE rfq_items
+         SET quantity = ?
+         WHERE id = ? AND expense_id = ?`,
+        [
+          Number(item.quantity),
+          item.rfq_item_id,
+          expense_id
+        ]
+      );
+    }
+
+    await conn.commit();
+
+    return res.json({ message: "RFQ quantities updated successfully" });
+
+  } catch (err) {
+
+    if (conn) await conn.rollback();
+
+    console.error("Update quantities error:", err);
+
+    return res.status(500).json({ error: err.message });
+
+  } finally {
+
+    if (conn) conn.release();
+
+  }
+});
+
+router.post("/rfq/undo", async (req, res) => {
+  const { expense_id } = req.body;
+ console.log(req.body);
+  if (!expense_id) {
+    return res.status(400).json({ message: "Expense ID required" });
+  }
+
+  const conn = await poolPromise.getConnection();
+
+  try {
+    await conn.beginTransaction();
+
+    // 1️⃣ Delete RFQ items
+    await conn.query(
+      `DELETE FROM rfq_items WHERE expense_id = ?`,
+      [expense_id]
+    );
+
+    // 2️⃣ Revert expense status
+    await conn.query(
+      `
+      UPDATE expense_requests
+      SET current_status = 'RFQ_PENDING',
+          updated_at = NOW()
+      WHERE id = ?
+      `,
+      [expense_id]
+    );
+
+    await conn.commit();
+
+    res.json({
+      message: "RFQ submission undone successfully"
+    });
+
+  } catch (err) {
+    await conn.rollback();
+    console.error("RFQ undo error:", err);
+    res.status(500).json({ message: "Failed to undo RFQ submission" });
+  } finally {
+    conn.release();
+  }
+});
+
+router.post("/undo-status", async (req, res) => {
+  const { expense_id, current_status } = req.body;
+
+console.log(req.body);
+  if (!expense_id || !current_status) {
+    return res.status(400).json({ message: "Expense ID and current status required" });
+  }
+
+  try {
+    const pool = await poolPromise;
+
+    // Determine previous status
+    const undoMap = {
+  RFQ_SUBMITTED: "RFQ_PENDING",
+  RFQ_RECOMMENDED_DM: "RFQ_SUBMITTED",
+  QUOTES_PENDING: "RFQ_RECOMMENDED_DM",
+};
+
+const previousStatus = undoMap[current_status];
+
+    const [result] = await pool.query(
+      `
+      UPDATE expense_requests
+      SET current_status = ?,
+          updated_at = NOW()
+      WHERE id = ?
+      AND current_status = ?
+      `,
+      [previousStatus, expense_id, current_status]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(400).json({
+        message: "Invalid undo operation",
+      });
+    }
+
+    res.json({
+      message: "Undo successful",
+      new_status: previousStatus,
+    });
+
+  } catch (err) {
+    console.error("Undo status error:", err);
+    res.status(500).json({ message: "Failed to undo status" });
+  }
+});
+
+router.post("/quotes/undo-upload", async (req, res) => {
+  const { expense_id } = req.body;
+
+  if (!expense_id) {
+    return res.status(400).json({ message: "Expense ID required" });
+  }
+
+  let conn;
+
+  try {
+    const pool = await poolPromise;
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    /* ================= GET QUOTES ================= */
+    const [quotes] = await conn.query(
+      `SELECT id FROM expense_quotes WHERE expense_id = ?`,
+      [expense_id]
+    );
+
+    const quoteIds = quotes.map(q => q.id);
+
+    if (quoteIds.length > 0) {
+
+      /* ================= DELETE QUOTE ITEMS ================= */
+      await conn.query(
+        `DELETE FROM expense_quote_items WHERE quote_id IN (?)`,
+        [quoteIds]
+      );
+
+      /* ================= DELETE QUOTES ================= */
+      await conn.query(
+        `DELETE FROM expense_quotes WHERE id IN (?)`,
+        [quoteIds]
+      );
+    }
+
+    /* ================= REVERT STATUS ================= */
+    await conn.query(
+      `
+      UPDATE expense_requests
+      SET current_status = 'QUOTES_PENDING',
+          updated_at = NOW()
+      WHERE id = ?
+      `,
+      [ expense_id]
+    );
+
+    await conn.commit();
+
+    res.json({
+      message: "Quotes upload undone successfully"
+    });
+
+  } catch (err) {
+    if (conn) await conn.rollback();
+    console.error("Undo quote upload error:", err);
+
+    res.status(500).json({
+      message: "Failed to undo quote upload",
+      error: err.message
+    });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+router.post("/quotes/recommend/undo", async (req, res) => {
+  let conn;
+
+  try {
+    const { expense_id} = req.body;
+
+    if (!expense_id) {
+      return res.status(400).json({
+        error: "Expense ID required"
+      });
+    }
+
+    const pool = await poolPromise;
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    /* 1️⃣ RESET ALL RECOMMENDATIONS */
+    await conn.query(
+      `
+      UPDATE expense_quotes
+      SET is_recommended = 0,
+          reason = NULL
+      WHERE expense_id = ?
+      `,
+      [expense_id]
+    );
+
+    /* 2️⃣ REVERT EXPENSE STATUS */
+    await conn.query(
+      `
+      UPDATE expense_requests
+      SET current_status = 'QUOTE_REVIEW_DM',
+          updated_at = NOW()
+      WHERE id = ?
+      `,
+      [expense_id]
+    );
+
+    await conn.commit();
+
+    res.json({
+      message: "Recommendation undone successfully"
+    });
+
+  } catch (err) {
+    if (conn) await conn.rollback();
+    console.error("UNDO RECOMMEND ERROR:", err);
+
+    res.status(500).json({
+      error: "Undo recommendation failed",
+      details: err.message
+    });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+router.post("/quotes/approve/undo", async (req, res) => {
+  const { expense_id } = req.body;
+
+  let conn;
+
+  try {
+    const pool = await poolPromise;
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    /* ================= RESET SELECTED QUOTES ================= */
+    await conn.query(
+      `
+      UPDATE expense_quotes
+      SET is_selected = 0
+      WHERE expense_id = ?
+      `,
+      [expense_id]
+    );
+
+    /* ================= REVERT EXPENSE STATUS ================= */
+    await conn.query(
+      `
+      UPDATE expense_requests
+      SET
+        current_status = 'QUOTE_APPROVAL_CH',
+        selected_vendor_id = NULL,
+        updated_at = NOW()
+      WHERE id = ?
+      `,
+      [expense_id]
+    );
+
+    await conn.commit();
+
+    res.json({
+      message: "Vendor approval undone successfully",
+      next_status: "QUOTE_APPROVAL_CH"
+    });
+
+  } catch (err) {
+    if (conn) await conn.rollback();
+    console.error("Undo vendor approval error:", err);
+
+    res.status(500).json({
+      error: "Undo vendor approval failed",
+      details: err.message
+    });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+
+router.get("/roles/:status", async (req, res) => {
+  const { status } = req.params;
+
+  console.log(status);
+  try {
+    const pool = await poolPromise;
+
+    const [rows] = await pool.query(
+      `SELECT role_id
+       FROM workflow_roles
+       WHERE status_code = ?`,
+      [status]
+    );
+
+    const roles = rows.map(r => r.role_id);
+
+    res.json({ roles });
+
+  } catch (err) {
+    console.error("Workflow roles error:", err);
+    res.status(500).json({ error: "Failed to fetch workflow roles" });
+  }
+});
 
 export default router;

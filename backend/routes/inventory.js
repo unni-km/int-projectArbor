@@ -58,7 +58,6 @@ router.post('/add', async (req, res) => {
     await conn.beginTransaction();
 
     try {
-  
       const [inventoryResult] = await conn.query(
         `INSERT INTO m_inventory 
          (item_id, quantity, unit, unit_price, vendor_id, userid, invoice_id, purchase_date)
@@ -188,15 +187,15 @@ router.put('/:id', async (req, res) => {
     item_id, quantity, unit, unit_price,
     vendor_id, invoice_id, userid, purchase_date,
   } = req.body;
-
+ console.log(req.body);
   try {
     const pool = await poolPromise;
     await pool.query(`
       UPDATE m_inventory SET
         item_id = ?, quantity = ?, unit = ?, unit_price = ?,
-        vendor_id = ?, invoice_id = ?,purchase_date = ?, userid = ?
+        vendor_id = ?, invoice_id = ?, userid = ?
       WHERE id = ?`,
-      [item_id, quantity, unit, unit_price, vendor_id, invoice_id, purchase_date, userid, id]
+      [item_id, quantity, unit, unit_price, vendor_id, invoice_id, userid, id]
     );
 
     res.json({ message: 'Item updated' });
@@ -303,6 +302,153 @@ router.post('/move-to-pantry', async (req, res) => {
   } catch (err) {
     console.error('Error in move-to-pantry:', err);
     res.status(500).json({ error: 'Error moving items', details: err.message });
+  }
+});
+
+router.get("/reports", async (req, res) => {
+  const { startDate, endDate } = req.query;
+
+  if (!startDate || !endDate) {
+    return res.status(400).json({ message: "Date range required" });
+  }
+
+  try {
+    const pool = await poolPromise;
+
+    const [rows] = await pool.query(
+      `
+      SELECT 
+          i.id AS item_id,
+          i.name AS item_name,
+          mi.unit,
+
+          /* Current Live Balance */
+          SUM(mi.quantity) AS current_balance,
+
+          /* Issued in Range */
+          COALESCE(SUM(
+              CASE 
+                  WHEN t.transaction_type = 'MOVE_TO_PANTRY'
+                  AND t.status = 'Approved'
+                  AND DATE(t.transaction_date) BETWEEN ? AND ?
+                  THEN t.quantity
+                  ELSE 0
+              END
+          ),0) AS issued_qty,
+
+          /* Movement Count */
+          COUNT(
+              CASE 
+                  WHEN t.transaction_type = 'MOVE_TO_PANTRY'
+                  AND t.status = 'Approved'
+                  AND DATE(t.transaction_date) BETWEEN ? AND ?
+                  THEN 1
+              END
+          ) AS movement_count,
+
+          /* Last Movement */
+          MAX(
+              CASE 
+                  WHEN t.transaction_type = 'MOVE_TO_PANTRY'
+                  AND t.status = 'Approved'
+                  THEN t.transaction_date
+              END
+          ) AS last_moved_on,
+
+          /* Stock Value */
+          SUM(mi.quantity * mi.unit_price) AS stock_value,
+
+          /* Average Price */
+          AVG(mi.unit_price) AS avg_price,
+
+          /* Opening Stock */
+          (
+              SUM(mi.quantity)
+              +
+              COALESCE((
+                  SELECT SUM(t2.quantity)
+                  FROM inventory_transactions t2
+                  JOIN m_inventory m3 ON m3.id = t2.inventory_id
+                  WHERE m3.item_id = i.id
+                  AND t2.transaction_type = 'MOVE_TO_PANTRY'
+                  AND t2.status = 'Approved'
+                  AND DATE(t2.transaction_date) < ?
+              ),0)
+          ) AS opening_stock,
+
+          /* Closing Stock */
+          (
+              SUM(mi.quantity)
+              +
+              COALESCE((
+                  SELECT SUM(t2.quantity)
+                  FROM inventory_transactions t2
+                  JOIN m_inventory m3 ON m3.id = t2.inventory_id
+                  WHERE m3.item_id = i.id
+                  AND t2.transaction_type = 'MOVE_TO_PANTRY'
+                  AND t2.status = 'Approved'
+                  AND DATE(t2.transaction_date) > ?
+              ),0)
+          ) AS closing_stock,
+
+          /* Usage Percentage */
+          ROUND(
+              (
+                  COALESCE(SUM(
+                      CASE 
+                          WHEN t.transaction_type = 'MOVE_TO_PANTRY'
+                          AND t.status = 'Approved'
+                          AND DATE(t.transaction_date) BETWEEN ? AND ?
+                          THEN t.quantity
+                          ELSE 0
+                      END
+                  ),0)
+                  /
+                  NULLIF(
+                      (
+                          SUM(mi.quantity)
+                          +
+                          COALESCE(SUM(
+                              CASE 
+                                  WHEN t.transaction_type = 'MOVE_TO_PANTRY'
+                                  AND t.status = 'Approved'
+                                  AND DATE(t.transaction_date) BETWEEN ? AND ?
+                                  THEN t.quantity
+                                  ELSE 0
+                              END
+                          ),0)
+                      ),
+                      0
+                  )
+              ) * 100,
+          2) AS usage_percent
+
+      FROM item i
+      JOIN m_inventory mi ON mi.item_id = i.id
+      LEFT JOIN inventory_transactions t ON t.inventory_id = mi.id
+
+      GROUP BY 
+          i.id,
+          i.name,
+          mi.unit
+
+      ORDER BY i.name ASC;
+      `,
+      [
+        startDate, endDate,   // issued
+        startDate, endDate,   // movement count
+        startDate,            // opening
+        endDate,              // closing
+        startDate, endDate,   // usage numerator
+        startDate, endDate    // usage denominator
+      ]
+    );
+
+    res.json(rows);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 

@@ -87,5 +87,49 @@ router.delete('/delete/:id', async (req, res) => {
 });
 
 
+// UPDATE location
+router.put('/update/:id', async (req, res) => {
+  const { id } = req.params;
+  const { LocationName, Description } = req.body;
+
+  try {
+    const pool = await poolPromise;
+
+    // 1️⃣ Check if location exists
+    const [existing] = await pool.query(
+      'SELECT * FROM location WHERE LocationID = ?',
+      [id]
+    );
+
+    if (!existing.length) {
+      return res.status(404).json({ message: 'Location not found' });
+    }
+
+    // 2️⃣ Update location
+    await pool.query(
+      `UPDATE location 
+       SET LocationCode = ?, 
+           Description = ?
+       WHERE LocationID = ?`,
+      [LocationName, Description, id]
+    );
+
+    // 3️⃣ Fetch updated record to return
+    const [updatedLocation] = await pool.query(
+      'SELECT * FROM location WHERE LocationID = ?',
+      [id]
+    );
+
+    res.json(updatedLocation[0]);
+
+  } catch (err) {
+    console.error('Error updating location:', err);
+    res.status(500).json({
+      error: 'Error updating location',
+      details: err.message
+    });
+  }
+});
+
 
 export default router;

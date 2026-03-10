@@ -221,3 +221,20 @@
   opacity: 0.4;
   pointer-events: none;
 }
+.large-popup {
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.report-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.report-table-wrapper {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+

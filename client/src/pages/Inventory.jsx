@@ -16,6 +16,7 @@ import AddInvoice from '../components/Addinvoice';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import BulkInvoiceUpdate from '../components/BulkInvoice';
+import InventoryReportPopup from './InventoryReport';
 
 
 
@@ -32,6 +33,7 @@ const Inventory = () => {
     const [showAddVendorForm, setShowAddVendorForm] = useState(false);
     const [showAddInvoiceForm, setshowAddInvoiceForm] = useState(false);
     const [showBulkInvoiceForm, setShowBulkInvoiceForm] = useState(false);
+    const [showInventoryReport, setShowInventoryReport] = useState(false);
     const role = parseInt(localStorage.getItem('roleid'), 10);
     dayjs.extend(utc);
     // Define openPopup function here
@@ -197,6 +199,12 @@ const canEditOrDelete = (item) => {
               <>
                 <button className="control-button" onClick={() => setShowAddItemForm(true)}>Add Item</button>
                 <button className="control-button" onClick={() => setShowAddVendorForm(true)}>Add Vendor</button>
+                <button
+  className="control-button"
+  onClick={() => setShowInventoryReport(true)}
+>
+  Inventory Report
+</button>
               </>
             )}
           </div>
@@ -404,6 +412,11 @@ const canEditOrDelete = (item) => {
   />
 )}
 
+{showInventoryReport && (
+  <InventoryReportPopup
+    closePopup={() => setShowInventoryReport(false)}
+  />
+)}
 
       </div>
     );

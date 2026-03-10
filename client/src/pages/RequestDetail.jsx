@@ -1,6 +1,7 @@
 // src/modules/expense/pages/RequestDetail.jsx
-import React, { useEffect, useState,useMemo, useRef } from "react";
-import { FaArrowLeft, FaHistory, FaEllipsisV, FaShieldAlt } from "react-icons/fa";
+import React, { useEffect, useState,useMemo } from "react";
+import { FaArrowLeft, FaShieldAlt } from "react-icons/fa";
+import { ToastContainer, toast } from 'react-toastify';
 import expenseApi from "../expenseApi";
 import generatePOPdf from "../components/generatePOPdf";
 import RequestHeader from "../components/RequestHeader";
@@ -16,7 +17,7 @@ const RequestDetail = ({ expenseId, onBack }) => {
   const [request, setRequest] = useState(null);
   const [loading, setLoading] = useState(true);
 
-
+const [allowedRoles, setAllowedRoles] = useState([]);
   // RFQ states
   const [itemId, setItemId] = useState("");
   const [qty, setQty] = useState("");
@@ -24,8 +25,10 @@ const RequestDetail = ({ expenseId, onBack }) => {
   const [items, setItems] = useState([]);
 const [rfqDraftItems, setRfqDraftItems] = useState([]);
 const [rfqItems, setRfqItems] = useState([]); // From DB (DM view)
-
-
+const [rejectingStage, setRejectingStage] = useState(null);
+const [rejectReason, setRejectReason] = useState("");
+const [approvalNote, setApprovalNote] = useState("");
+const [approvingStage, setApprovingStage] = useState(null);
   // Vendors
 const [vendors, setVendors] = useState([]);
 
@@ -38,7 +41,6 @@ const [quoteVendorId, setQuoteVendorId] = useState("");
 
 const [vendorQuotes, setVendorQuotes] = useState([]);
 const [quotes, setQuotes] = useState([]);
-const [expandedQuoteId, setExpandedQuoteId] = useState(null);
 const [showCompare, setShowCompare] = useState(false);
 
 
@@ -56,8 +58,8 @@ const [poTerms, setPoTerms] = useState(
 2. Delivery Period: Within 3 working days from the date of confirmed order`
 );
 const [poTd, setPoTd] = useState([]);
-const [poPdfUrl, setPoPdfUrl] = useState(null);
-
+const [originalPoItems, setOriginalPoItems] = useState([]);
+const [isQuantityModified, setIsQuantityModified] = useState(false);
 
   // Invoice upload
   const [invNo, setInvNo] = useState("");
@@ -78,11 +80,13 @@ const [poPdfUrl, setPoPdfUrl] = useState(null);
   const userId =
     localStorage.getItem("userid") || localStorage.getItem("user_id");
     const isDM = roleId === 44;
-     const canDMGeneratePO =
-  isDM && request && request.current_status === "PO_PENDING_DM";
+
 
 
   /* ---------------------- LOAD DATA ---------------------- */
+
+
+
   const comparisonItems = React.useMemo(() => {
   if (!quotes?.length) return [];
 
@@ -109,6 +113,7 @@ const [poPdfUrl, setPoPdfUrl] = useState(null);
   return Object.values(map);
 }, [quotes]);
 
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -134,18 +139,47 @@ setVendors(vendorList);
     load();
   }, [expenseId]);
 
-useEffect(() => {
-  if (!canDMGeneratePO) return;
+  useEffect(() => {
+  if (!request) return;
 
-  const loadPO = async () => {
-    const data = await expenseApi.getPOItems(expenseId);
-
-    setPoItems(data.items);
+  const loadRoles = async () => {
+    const res = await expenseApi.getWorkflowRoles(request.current_status);
+    setAllowedRoles(res.roles || []);
   };
 
-  loadPO();
-}, [canDMGeneratePO, expenseId]);
+  loadRoles();
+}, [request]);
 
+useEffect(() => {
+  if (!request) return;
+
+  if (
+    request.current_status === "PO_DRAFT_DE" ||
+    request.current_status === "PO_REVIEW_DM" ||
+    request.current_status === "PO_REAPPROVAL_CH"
+  ) {
+    expenseApi.getPOItems(request.id).then(res => {
+      setPoItems(res.items || []);
+      setOriginalPoItems(res.items || []);
+    });
+  }
+}, [request]);
+
+useEffect(() => {
+  if (!originalPoItems.length || !poItems.length) return;
+
+  const changed = poItems.some((item, idx) =>
+    Number(item.quantity) !== Number(originalPoItems[idx]?.quantity)
+  );
+
+  setIsQuantityModified(changed);
+}, [poItems, originalPoItems]);
+
+const isEffectiveQuantityChanged = useMemo(() => {
+  return poItems.some(item =>
+    Number(item.quantity) !== Number(item.original_quantity)
+  );
+}, [poItems]);
 
 const loadQuotes = async () => {
   try {
@@ -158,7 +192,17 @@ const loadQuotes = async () => {
 };
 
 useEffect(() => {
-  loadQuotes();
+  const loadQuote = async () => {
+    try {
+      const data = await expenseApi.getQuotes(expenseId);
+      setQuotes(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+      setQuotes([]);
+    }
+  };
+
+  loadQuote();
 }, [expenseId]);
 
 
@@ -172,10 +216,33 @@ useEffect(() => {
 }, [request]);
 
 
-  const refresh = async () => {
+const refresh = async () => {
+  try {
+    setLoading(true);
+
     const data = await expenseApi.getOne(expenseId);
     setRequest(data);
-  };
+
+    // Load item master list
+    const itemList = await expenseApi.getItems();
+    setItems(itemList);
+
+   
+      const rfqData = await expenseApi.getRFQItems(expenseId);
+      setRfqItems(rfqData);
+
+       loadQuotes();
+    
+
+    const vendorList = await expenseApi.getVendors();
+    setVendors(vendorList);
+
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   if (loading) return <p>Loading…</p>;
   if (!request) return <p>Request not found</p>;
@@ -186,32 +253,93 @@ useEffect(() => {
   const status = request.current_status;
 
   const isExec = roleId === 43;
-  const isFinExec = roleId === 45;
-  const isFM = roleId === 46;
   const isCH = roleId === 47;
 
-  const canExecCreateRFQ = isExec && status === "RFQ_PENDING";
-  const showDraft = canExecCreateRFQ && status === "RFQ_PENDING";
-  const canDMRecommendRFQ =
-  isDM && status === "RFQ_SUBMITTED";
+  const canAct = (stage) =>
+  allowedRoles.includes(roleId) && status === stage;
 
-const canCHApproveRFQ =
-  isCH && status === "RFQ_RECOMMENDED_DM";
+const showDraft = canAct("RFQ_PENDING");
+const canDMRecommendRFQ = canAct("RFQ_SUBMITTED");
+const canCHApproveRFQ = canAct("RFQ_RECOMMENDED_DM");
 
+const canUploadQuotes = canAct("QUOTES_PENDING");
+const canDMReviewQuotes = canAct("QUOTE_REVIEW_DM");
+const canCHApproveVendor = canAct("QUOTE_APPROVAL_CH");
 
+const canDEEditPO = canAct("PO_DRAFT_DE");
+const canDMReviewPO = canAct("PO_REVIEW_DM");
+const canCHReapprovePO = canAct("PO_REAPPROVAL_CH");
 
-  const canUploadQuotes = isExec && status === "QUOTES_PENDING";
-  const canDMReviewQuotes = isDM && status === "QUOTE_REVIEW_DM";
-  const canCHApproveVendor = isCH && status === "QUOTE_APPROVAL_CH";
-  const canExecUploadInvoice = isExec && status === "PO_ISSUED";
-  const canDMInvoiceReview = isDM && status === "INVOICE_REVIEW_DM";
-  const canFMInvoiceReview = isFM && status === "INVOICE_REVIEW_FM";
-  const canFinInitPayment = isFinExec && status === "PAYMENT_INITIATION";
-  const canCHAuthorizePayment = isCH && status === "PAYMENT_APPROVAL_CH";
-  const canFinExecutePayment = isFinExec && status === "PAYMENT_EXECUTION";
-  const canExecVendorVerify = isExec && status === "VENDOR_VERIFICATION";
+const canExecUploadInvoice = canAct("PO_ISSUED");
+const canDMInvoiceReview = canAct("INVOICE_REVIEW_DM");
+const canFMInvoiceReview = canAct("INVOICE_REVIEW_FM");
+
+const canFinInitPayment = canAct("PAYMENT_INITIATION");
+const canCHAuthorizePayment = canAct("PAYMENT_APPROVAL_CH");
+const canFinExecutePayment = canAct("PAYMENT_EXECUTION");
+
+const canExecVendorVerify = canAct("VENDOR_VERIFICATION");
 
   /* ---------------------- RFQ ACTIONS ---------------------- */
+
+  const canUndoRFQ =
+  request.current_status === "RFQ_SUBMITTED" &&
+  isExec;
+  const canUndoDM =
+  request.current_status === "RFQ_RECOMMENDED_DM" &&
+  isDM;
+  const canUndoCH =
+  request.current_status === "QUOTES_PENDING" &&
+  isCH;
+
+   const canUndoQuote =
+  request.current_status === "QUOTE_REVIEW_DM" &&
+  isExec;
+ const canQuotesUndoDM =
+  request.current_status === "QUOTE_APPROVAL_CH" &&
+  isDM;
+
+   const canQuotesUndoCH =
+  request.current_status === "PO_DRAFT_DE" &&
+  isCH;
+
+
+  const undo = async () => {
+  try {
+    await expenseApi.undoStatus({expense_id: request.id, current_status:request.current_status});
+    toast.success("reverted");
+   await refresh();
+  } catch (err) {
+    toast.error("Undo failed");
+  }
+};
+
+  const undoRFQ = async () => {
+  try {
+    await expenseApi.undoRFQ({expense_id: request.id});
+    toast.success("RFQ reverted to draft");
+    await refresh();// refresh page data
+  } catch (err) {
+    toast.error("Failed to undo RFQ");
+  }
+};
+ const undoQuote = async () => {
+  try {
+    if(canQuotesUndoDM)
+    {
+       await expenseApi.undoQuoteDM({expense_id: request.id});
+    }else if(canQuotesUndoCH){
+       await expenseApi.undoQuoteCH({expense_id: request.id});
+    }else{
+    await expenseApi.undoQuote({expense_id: request.id});
+    }
+    toast.success("quote reverted");
+    await refresh();
+    // refresh page data
+  } catch (err) {
+    toast.error("Failed to undo RFQ");
+  }
+};
  const addRFQItem = () => {
   if (!itemId || !qty) {
     alert("Item and quantity are required");
@@ -278,53 +406,62 @@ const approveRFQByCH = async () => {
   await expenseApi.approveRFQByCH({
     expense_id: request.id,
     approved_by: userId,
+     note: approvalNote || null,
   });
+   setApprovalNote("");
+    setApprovingStage(null);
   await refresh();
 };
 
 
+
+const rejectStage = async (stage) => {
+  if (!rejectReason.trim()) {
+    alert("Rejection reason is required");
+    return;
+  }
+
+ 
+  try {
+    await expenseApi.rejectExpense({
+      expense_id: request.id,
+      stage,
+      reason: rejectReason,
+      acted_by: userId
+    });
+
+    setRejectReason("");
+    setRejectingStage(null);
+    await refresh();
+  } catch (err) {
+    console.error("RFQ rejection failed:", err);
+    alert("Failed to reject");
+  }
+};
+
   /* ---------------------- QUOTE UPLOAD ---------------------- */
 
-const addVendorQuote = () => {
-  if (!quoteVendorId) {
-    alert("Select vendor");
-    return;
-  }
 
-  if (vendorQuotes.some(v => v.vendor_id === quoteVendorId)) {
-    alert("Quote already added for this vendor");
-    return;
-  }
-
-  const vendor = vendors.find(v => v.id === quoteVendorId);
-
-  setVendorQuotes(prev => [
-    ...prev,
-    {
-      tempId: Date.now(),
-      vendor_id: quoteVendorId,
-      vendor_name: vendor?.name,
-      items: rfqItems.map(i => ({
-        rfq_item_id: i.id,
-        item_name: i.item_name,
-        quantity: i.quantity,
-        unit_price: ""
-      }))
-    }
-  ]);
-
-  setQuoteVendorId("");
-};
 
 
 
 const submitQuoteWithItems = async () => {
+  // ✅ Filter vendors that actually have data
+  const validVendors = vendorQuotes.filter(v => v.vendor_id);
+
+  // ❗ Validation: Minimum 2 vendors required
+  if (validVendors.length < 2) {
+     toast.error("Please add at least 2 vendors before submitting quotes.");
+    return;
+  }
+
   const form = new FormData();
   form.append("expense_id", request.id);
   form.append("uploaded_by", userId);
 
-  vendorQuotes.forEach((v, idx) => {
+  validVendors.forEach((v, idx) => {
     form.append(`vendors[${idx}][vendor_id]`, v.vendor_id);
+
     if (v.quote_file) {
       form.append(`vendors[${idx}][file]`, v.quote_file);
     }
@@ -336,6 +473,7 @@ const submitQuoteWithItems = async () => {
   });
 
   await expenseApi.submitMultiVendorQuotes(form);
+
   setVendorQuotes([]);
   await refresh();
 };
@@ -359,8 +497,11 @@ const approveVendorByCH = async (q) => {
     vendor_id: q.vendor_id,
     amount: q.amount,
     approved_by: userId,
+     note: approvalNote || null,
   });
-  await loadQuotes();
+    setApprovingStage(null);
+  setApprovalNote("");
+  await refresh();
 };
 
 
@@ -376,12 +517,15 @@ const approveVendorByCH = async (q) => {
     await refresh();
   };
 
-  
 
 
   /* ---------------------- CH Vendor Approval ---------------------- */
 
   /* ---------------------- PO ISSUE ---------------------- */
+
+
+
+
 
 const createPO = async () => {
   if (!request?.selected_vendor_id) {
@@ -437,16 +581,60 @@ const selectedVendor = vendors?.find(
 
 const gstRate = Number(selectedVendor?.gst_rate || 0); // 0.18
 
-const getLineBaseTotal = item =>
-  Number(item.quantity || 0) * Number(item.unit_price || 0);
-
-const getLineGST = item =>
-  getLineBaseTotal(item) * gstRate;
-
-const getLineTotalWithGST = item =>
-  getLineBaseTotal(item) + getLineGST(item);
 
 
+
+
+
+const sendToDM = async () => {
+
+    if (isEffectiveQuantityChanged) {
+    await expenseApi.updatePOQuantities({
+      expense_id: request.id,
+      modified_by: userId,
+      items: poItems.map(i => ({
+        rfq_item_id: i.rfq_item_id,
+        quantity: Number(i.quantity)
+      }))
+    });
+  }
+
+  await expenseApi.updatePOStatus({
+    expense_id: request.id,
+    status: "PO_REVIEW_DM"
+  });
+  await refresh();
+};
+
+const approvePOByDM = async () => {
+   await createPO(); 
+  await refresh();
+};
+
+const sendToCH = async () => {
+
+  if (isEffectiveQuantityChanged) {
+    await expenseApi.updatePOQuantities({
+      expense_id: request.id,
+      modified_by: userId,
+      items: poItems.map(i => ({
+        rfq_item_id: i.rfq_item_id,
+        quantity: Number(i.quantity)
+      }))
+    });
+  }
+
+  await expenseApi.updatePOStatus({
+    expense_id: request.id,
+    status: "PO_REAPPROVAL_CH"
+  });
+  await refresh();
+};
+
+const reapprovePOByCH = async () => {
+   await createPO();
+  await refresh();
+};
 
 
 
@@ -522,7 +710,9 @@ if (loading) return (
 
 return (
     // OUTER SHELL: Forces page to be exactly screen height
+    
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
+       <ToastContainer position="top-center" autoClose={3000} theme="light" />
       
       {/* --- TOP SECTION (Fixed) --- 
           This block will NEVER move or cover content. 
@@ -534,12 +724,8 @@ return (
             onClick={onBack}
             className="group flex items-center text-xs font-bold text-gray-500 hover:text-blue-600 transition-colors uppercase tracking-wider"
           >
-            <FaArrowLeft className="mr-2" /> Back to Pipeline
+            <FaArrowLeft className="mr-2" />
           </button>
-          <div className="flex gap-2">
-            <button className="p-1.5 text-gray-400 hover:bg-gray-100 rounded"><FaHistory /></button>
-            <button className="p-1.5 text-gray-400 hover:bg-gray-100 rounded"><FaEllipsisV /></button>
-          </div>
         </div>
 
         {/* Header Component - Ensure sticky classes are REMOVED from inside this component */}
@@ -616,6 +802,22 @@ return (
                 recommendRFQ={recommendRFQ}
                 canCHApproveRFQ={canCHApproveRFQ}
                 approveRFQByCH={approveRFQByCH}
+                 rejectingStage={rejectingStage}
+    setRejectingStage={setRejectingStage}
+    rejectReason={rejectReason}
+    setRejectReason={setRejectReason}
+    rejectStage={rejectStage}
+    canUndoRFQ={canUndoRFQ}
+    undoRFQ={undoRFQ}
+    canUndoDM={canUndoDM}
+    undo={undo}
+    canUndoCH={canUndoCH}
+    approvalNote={approvalNote}
+setApprovalNote={setApprovalNote}
+approvingStage={approvingStage}
+setApprovingStage={setApprovingStage}
+
+    
               />
             </div>
 
@@ -643,6 +845,19 @@ return (
                 setShowCompare={setShowCompare}
                 comparisonItems={comparisonItems}
                 baseURL={baseURL}
+                rejectingStage={rejectingStage}
+setRejectingStage={setRejectingStage}
+rejectReason={rejectReason}
+setRejectReason={setRejectReason}
+rejectStage={rejectStage}
+canUndoQuote={canUndoQuote}
+undoQuote={undoQuote}
+canQuotesUndoDM={canQuotesUndoDM}
+canQuotesUndoCH={canQuotesUndoCH}
+approvalNote={approvalNote}
+setApprovalNote={setApprovalNote}
+approvingStage={approvingStage}
+setApprovingStage={setApprovingStage}
               />
             </div>
 
@@ -657,9 +872,26 @@ return (
                  gstRate={gstRate}
                  poTerms={poTerms}
                  setPoTerms={setPoTerms}
-                 canDMGeneratePO={canDMGeneratePO}
-                 createPO={createPO}
-                 userId={userId}
+                   /* 🔵 NEW WORKFLOW FLAGS */
+  canDEEditPO={canDEEditPO}
+  canDMReviewPO={canDMReviewPO}
+  canCHReapprovePO={canCHReapprovePO}
+
+  /* 🔁 Quantity Tracking */
+  isQuantityModified={isQuantityModified}
+
+  /* 🔘 NEW ACTION HANDLERS */
+  sendToDM={sendToDM}
+  approvePOByDM={approvePOByDM}
+  reapprovePOByCH={reapprovePOByCH}
+  sendToCH={sendToCH}
+  isEffectiveQuantityChanged={isEffectiveQuantityChanged}
+   rejectingStage={rejectingStage}
+    setRejectingStage={setRejectingStage}
+    rejectReason={rejectReason}
+    setRejectReason={setRejectReason}
+    rejectStage={rejectStage}
+  
               />
             </div>
 
@@ -681,6 +913,7 @@ return (
                  setGst={setGst}
                  setTds={setTds}
                  setInvoiceFile={setInvoiceFile}
+                  baseURL={baseURL}
               />
             </div>
 

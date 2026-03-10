@@ -17,10 +17,21 @@ export default function PurchaseOrderBlock({
   setPoItems, // Needed to update state
   poTerms,
   setPoTerms,
-  canDMGeneratePO,
-  createPO,
-  userId,
   poTd,
+  canDEEditPO,
+  canDMReviewPO,
+  canCHReapprovePO,
+  isQuantityModified,
+  sendToDM,
+  approvePOByDM,
+  reapprovePOByCH,
+  sendToCH,
+  isEffectiveQuantityChanged,
+    rejectingStage,
+  setRejectingStage,
+  rejectReason,
+  setRejectReason,
+  rejectStage
 }) {
   const vendor = vendors.find((v) => v.id === request.selected_vendor_id);
 
@@ -113,7 +124,7 @@ export default function PurchaseOrderBlock({
 
                 {/* Quantity Editor */}
                 <div className="col-span-2 flex items-center justify-start md:justify-center gap-2">
-                  {canDMGeneratePO ? (
+                  {(canDEEditPO || canDMReviewPO) ? (
                     <>
                       <button
                         onClick={() => handleQuantityChange(idx, -1)}
@@ -160,7 +171,7 @@ export default function PurchaseOrderBlock({
           
           {/* Terms & Conditions Input */}
           <div className="w-full md:w-2/3">
-            {canDMGeneratePO ? (
+            {(canDEEditPO || canDMReviewPO)? (
               <div>
                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">
                     Terms & Conditions
@@ -199,49 +210,124 @@ export default function PurchaseOrderBlock({
         </div>
 
         {/* ACTIONS */}
-        <div className="mt-8 flex justify-end gap-3">
-          {canDMGeneratePO && (
-            <button
-              onClick={() =>
-                createPO({
-                  expense_id: request.id,
-                  vendor_id: request.selected_vendor_id,
-                  items: poItems.map(i => ({
-                     rfq_item_id: i.rfq_item_id,
-                     quantity: Number(i.quantity),
-                     unit_price: Number(i.unit_price),
-                     gst_rate: i.gst_rate ? Number(i.gst_rate) : 0,
-                     // Optional: Calculate tax amount here if backend needs it explicit
-                     gst_amount: (Number(i.quantity) * Number(i.unit_price) * (Number(i.gst_rate || 0) / 100))
-                  })),
-                  terms: poTerms,
-                  created_by: userId,
-                  total_amount: grandTotal
-                })
-              }
-              className="px-8 py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg shadow-green-200 hover:bg-green-700 transition-all active:scale-[0.98] flex items-center gap-2"
-            >
-              <FaCalculator /> Issue Purchase Order
-            </button>
-          )}
+<div className="mt-8 flex justify-end gap-3">
 
-          {request.current_status === "PO_ISSUED" && (
-            <button
-              className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center gap-2"
-              onClick={() =>
-                generatePOPdf({
-                  request,
-                  vendor,
-                  poItems,
-                  poTd,
-                  totals: { subTotal, totalTax, grandTotal }
-                })
-              }
-            >
-              <FaFilePdf /> Download PO PDF
-            </button>
-          )}
-        </div>
+  {/* 🔵 DE STAGE */}
+  {canDEEditPO && (
+    <button
+      onClick={sendToDM}
+      className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700 transition-all"
+    >
+      Send to DM for Review
+    </button>
+  )}
+
+  {/* 🟢 DM REVIEW (No Qty Change) */}
+  {canDMReviewPO && !isEffectiveQuantityChanged && (
+    <button
+      onClick={approvePOByDM}
+      className="px-8 py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg hover:bg-green-700 transition-all flex items-center gap-2"
+    >
+      <FaCalculator /> Approve & Issue PO
+    </button>
+    
+    
+  )}
+
+  {/* 🟠 DM REVIEW (Qty Modified) */}
+  {canDMReviewPO  && isEffectiveQuantityChanged && (
+    <button
+      onClick={sendToCH}
+      className="px-8 py-3 bg-orange-600 text-white rounded-xl font-bold shadow-lg hover:bg-orange-700 transition-all"
+    >
+      Quantity Modified — Send to CH
+    </button>
+  )}
+
+  {canDMReviewPO && (
+  <button
+    onClick={() => setRejectingStage("PO_REVIEW_DM")}
+    className="px-6 py-3 bg-red-600 text-white rounded-xl font-bold shadow hover:bg-red-700"
+  >
+    Reject
+  </button>
+)}
+
+  {/* 🟣 CH RE-APPROVAL */}
+  {canCHReapprovePO && (
+    <button
+      onClick={reapprovePOByCH}
+      className="px-8 py-3 bg-purple-600 text-white rounded-xl font-bold shadow-lg hover:bg-purple-700 transition-all flex items-center gap-2"
+    >
+      <FaCalculator /> Final Approve & Issue PO
+    </button>
+  )}
+
+  {canCHReapprovePO && (
+  <button
+    onClick={() => setRejectingStage("PO_REAPPROVAL_CH")}
+    className="px-6 py-3 bg-red-600 text-white rounded-xl font-bold shadow hover:bg-red-700"
+  >
+    Reject
+  </button>
+)}
+
+  {/* 🔵 DOWNLOAD */}
+  {request.current_status === "PO_ISSUED" && (
+    <button
+      onClick={() =>
+        generatePOPdf({
+          request,
+          vendor,
+          poItems,
+          poTd,
+          totals: { subTotal, totalTax, grandTotal }
+        })
+      }
+      className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700 transition-all flex items-center gap-2"
+    >
+      <FaFilePdf /> Download PO PDF
+    </button>
+  )}
+
+
+</div>
+{rejectingStage && (
+  <div className="mt-4 bg-red-50 border border-red-200 p-4 rounded-xl">
+    
+    <label className="text-xs font-bold text-red-600 uppercase">
+      Rejection Reason
+    </label>
+
+    <textarea
+      className="w-full border p-2 rounded mt-2"
+      rows={3}
+      value={rejectReason}
+      onChange={(e) => setRejectReason(e.target.value)}
+      placeholder="Enter reason for rejection"
+    />
+
+    <div className="flex gap-3 mt-3">
+     <button
+  disabled={!rejectReason.trim()}
+  onClick={() => rejectStage(rejectingStage)}
+  className="px-4 py-2 bg-red-600 text-white rounded disabled:opacity-40"
+>
+  Confirm Reject
+</button>
+
+      <button
+        onClick={() => {
+          setRejectingStage(null);
+          setRejectReason("");
+        }}
+        className="px-4 py-2 bg-gray-300 rounded"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
       </div>
     </section>
   );

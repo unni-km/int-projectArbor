@@ -14,6 +14,7 @@ import staffRoutes from './routes/staff.js';
 import locationRoutes from './routes/location.js'
 import barcodeRoutes from './routes/barcode.js'
 import expenseRoutes from './routes/expense.js'
+import workflowRoutes from './routes/workflow.js'
 import dotenv from 'dotenv';
 
 
@@ -40,6 +41,7 @@ app.use('/staff', staffRoutes);
 app.use('/locations', locationRoutes);
 app.use('/barcode', barcodeRoutes);
 app.use('/expense', expenseRoutes);
+app.use('/workflow', workflowRoutes);
 
 app.get("/", (req, res) => {
   res.send("Server running...");

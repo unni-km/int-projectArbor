@@ -157,6 +157,49 @@ router.post("/bulk-update", async (req, res) => {
   }
 });
 
+
+router.post("/direct/upload", upload.single("invoice_file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "Invoice file required" });
+
+    const {
+      expense_id,
+      vendor_id,
+      invoice_no,
+      taxable_amount,
+      gst_amount,
+      tds_amount,
+      final_amount
+    } = req.body;
+    console.log(req.body);
+
+    const blobName = `${Date.now()}-${req.file.originalname}`;
+    const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
+    await blockBlobClient.uploadData(req.file.buffer, {
+      blobHTTPHeaders: { blobContentType: req.file.mimetype },
+    });
+
+    const fileUrl = blockBlobClient.url;
+
+    const pool = await poolPromise;
+    await pool.execute(
+      `INSERT INTO invoice 
+      (invoice_no, vendor_id, invoice_file_path, taxable_amount, gst_amount, tds_amount, final_amount, expense_id, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', NOW())`,
+      [invoice_no, vendor_id, fileUrl, taxable_amount, gst_amount, tds_amount, final_amount, expense_id]
+    );
+
+    await pool.execute(
+      `UPDATE expense_requests SET current_status='INVOICE_REVIEW_DM' WHERE id=?`,
+      [expense_id]
+    );
+
+    res.json({ message: "Invoice uploaded", fileUrl });
+  } catch (err) {
+    res.status(500).json({ error: "Invoice upload failed", details: err.message });
+  }
+});
 /* -----------------------------------------
    6. GET - Download Invoice (Private Container)
 ------------------------------------------ */

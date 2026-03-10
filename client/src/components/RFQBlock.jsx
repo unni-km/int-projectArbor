@@ -1,5 +1,5 @@
 import React from "react";
-import { FaPlus, FaTrashAlt, FaClipboardList, FaCheckCircle, FaPaperPlane } from "react-icons/fa";
+import { FaPlus, FaTrashAlt, FaClipboardList, FaPaperPlane, FaUndo } from "react-icons/fa";
 
 export default function RFQBlock({
   showDraft,
@@ -18,7 +18,22 @@ export default function RFQBlock({
   canDMRecommendRFQ,
   recommendRFQ,
   canCHApproveRFQ,
-  approveRFQByCH
+  approveRFQByCH,
+    rejectingStage,
+  setRejectingStage,
+  rejectReason,
+  setRejectReason,
+  rejectStage,
+  canUndoRFQ,
+    undoRFQ,
+    canUndoDM,
+    undo,
+    canUndoCH,
+    approvalNote,
+setApprovalNote,
+approvingStage,
+setApprovingStage,
+
 }) {
   return (
     <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -141,28 +156,151 @@ export default function RFQBlock({
           </div>
         )}
 
+        {canUndoRFQ && (
+  <div className="mt-6 pt-6 border-t border-gray-100 flex justify-end">
+    <button
+      className="flex items-center gap-2 px-6 py-2.5 bg-yellow-50 text-yellow-700 font-bold rounded-lg hover:bg-yellow-100 transition"
+      onClick={undoRFQ}
+    >
+      <FaUndo size={13}/>
+Undo RFQ
+    </button>
+  </div>
+)}
+
         {/* Action Bar for DM/CH */}
-        {(canDMRecommendRFQ || canCHApproveRFQ) && (
-          <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end gap-3">
-            {canDMRecommendRFQ && (
-              <button
-                className="px-6 py-2.5 bg-indigo-50 text-indigo-700 font-bold rounded-lg hover:bg-indigo-100 transition-all"
-                onClick={recommendRFQ}
-              >
-                Recommend to CH
-              </button>
-            )}
-            {canCHApproveRFQ && (
-              <button
-                className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-all"
-                onClick={approveRFQByCH}
-              >
-                <FaCheckCircle />
-                Approve & Process
-              </button>
-            )}
-          </div>
-        )}
+{(canDMRecommendRFQ || canCHApproveRFQ) && (
+  <div className="mt-8 pt-6 border-t border-gray-100 space-y-4">
+
+    {/* DM Stage */}
+    {canDMRecommendRFQ && (
+      <div className="flex justify-end gap-3">
+        <button
+          className="px-6 py-2.5 bg-indigo-50 text-indigo-700 font-bold rounded-lg"
+          onClick={recommendRFQ}
+        >
+          Recommend to CH
+        </button>
+
+        <button
+          className="px-6 py-2.5 bg-red-50 text-red-600 font-bold rounded-lg"
+          onClick={() => setRejectingStage("RFQ_SUBMITTED")}
+        >
+          Reject
+        </button>
+      </div>
+    )}
+
+    
+    {/* CH Stage */}
+    {canCHApproveRFQ && !approvingStage && !rejectingStage && (
+      <div className="flex justify-end gap-3">
+        <button
+          className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white font-bold rounded-lg"
+         onClick={() => setApprovingStage("RFQ_RECOMMENDED_DM")}
+        >
+          Approve & Process
+        </button>
+
+        <button
+          className="px-6 py-2.5 bg-red-50 text-red-600 font-bold rounded-lg"
+          onClick={() => setRejectingStage("RFQ_RECOMMENDED_DM")}
+        >
+          Reject
+        </button>
+      </div>
+    )}
+
+    {/* Rejection Comment Box */}
+    {rejectingStage && (
+      <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+        <textarea
+          className="w-full border rounded p-2 text-sm"
+          placeholder="Reason for rejection..."
+          value={rejectReason}
+          onChange={(e) => setRejectReason(e.target.value)}
+        />
+
+        <div className="flex justify-end gap-3 mt-3">
+          <button
+            className="px-4 py-2 bg-gray-200 rounded"
+            onClick={() => {
+              setRejectingStage(null);
+              setRejectReason("");
+            }}
+          >
+            Cancel
+          </button>
+
+          <button
+            className="px-4 py-2 bg-red-600 text-white rounded"
+            onClick={() => rejectStage(rejectingStage)}
+          >
+            Confirm Reject
+          </button>
+        </div>
+      </div>
+    )}
+  </div>
+)}
+  {canUndoDM && (
+      <button
+        className="flex items-center gap-2 px-6 py-2.5 bg-yellow-50 text-yellow-700 font-bold rounded-lg hover:bg-yellow-100 transition"
+        onClick={undo}
+      >
+        <FaUndo size={13} />
+        Undo
+      </button>
+    )}
+    {canUndoCH && (
+  <div className="flex justify-end">
+    <button
+      className="flex items-center gap-2 px-6 py-2.5 bg-yellow-50 text-yellow-700 font-bold rounded-lg hover:bg-yellow-100 transition"
+      onClick={undo}
+    >
+      <FaUndo size={13} />
+      Undo
+    </button>
+  </div>
+)}
+{approvingStage && (
+  <div className="bg-green-50 p-4 rounded-lg border border-green-200 mt-4">
+    
+    <label className="text-sm font-semibold text-green-700">
+      Approval Note (Optional)
+    </label>
+
+    <textarea
+      className="w-full border rounded p-2 text-sm mt-2"
+      placeholder="Add optional approval note..."
+      value={approvalNote}
+      onChange={(e) => setApprovalNote(e.target.value)}
+    />
+
+    <div className="flex justify-end gap-3 mt-3">
+
+      <button
+        className="px-4 py-2 bg-gray-200 rounded"
+        onClick={() => {
+          setApprovingStage(null);
+          setApprovalNote("");
+        }}
+      >
+        Cancel
+      </button>
+
+      <button
+        className="px-4 py-2 bg-green-600 text-white rounded"
+        onClick={() => approveRFQByCH(approveRFQByCH)}
+      >
+        Confirm Approval
+      </button>
+
+    </div>
+
+  </div>
+)}
+
       </div>
     </section>
   );
